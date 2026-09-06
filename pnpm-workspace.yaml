@@ -19,3 +19,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - threadkit@0.1.0
   - "@bitbaum/mail-kit"
+  - "@bitbaum/ai-kit@0.9.0"

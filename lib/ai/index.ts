@@ -1,5 +1,5 @@
 /**
- * AI provider — OpenAI-compatible chat completions over fetch.
+ * AI provider — OpenAI-compatible chat completions, via the fleet engine.
  *
  * Health data leaves this server ONLY when all three env vars are set, which
  * is a deliberate operator act: the provider must be EU/CH-hosted and under a
@@ -9,8 +9,34 @@
  *
  *   AI_BASE_URL  e.g. https://api.mistral.ai/v1
  *   AI_API_KEY   provider key
- *   AI_MODEL     e.g. mistral-large-latest
+ *   AI_MODEL     e.g. mistral-large-latest (comma-separated for a fallback)
+ *
+ * ── Why this uses @bitbaum/ai-kit but NOT its default chain ──────────────────
+ * The fleet's `freeChain()` is Groq then OpenRouter: both US-hosted, neither
+ * under a DPA with this clinic. Pointing patient data at it would be a data
+ * protection breach, so the provider stays exactly where the operator put it —
+ * one endpoint, chosen deliberately, checked against regulation.ts.
+ *
+ * What the engine is used for is the REQUEST, which is where the defects were:
+ *
+ *   - NO DEADLINE. The previous `fetch` had no timeout at all, so a provider
+ *     that accepted the connection and never answered held a clinician's
+ *     request open indefinitely. `complete()` abandons a link after 30s.
+ *   - 429 UNREAD. "AI provider error (429)" told a clinician nothing and the
+ *     operator less. The three kinds of 429 share a status code and want
+ *     opposite responses; only the body tells them apart, and the body was
+ *     logged and thrown away. A daily quota that resets in four hours can now
+ *     say so.
+ *   - AN EMPTY 200 was already treated as a failure here, which is more than
+ *     most of this fleet managed. That judgement is now the engine's, and it
+ *     stays.
+ *
+ * AI_MODEL accepts a comma-separated list so a rotted model id has somewhere
+ * to fall. Every entry is served by the SAME operator-configured endpoint, so
+ * a longer list changes nothing about where the data goes.
  */
+
+import { complete, ChainExhaustedError, rateLimitMessage, type Link } from "@bitbaum/ai-kit";
 
 export function isAiConfigured(): boolean {
   return Boolean(process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL);
@@ -27,6 +53,36 @@ export function isAiDpaSigned(): boolean {
 
 export type AiResult = { ok: true; text: string } | { ok: false; error: string };
 
+/**
+ * The one provider this deployment is allowed to talk to.
+ *
+ * Built per call, never at module scope: Next evaluates module-level code
+ * during the BUILD, where these env vars are absent, and a chain frozen there
+ * would stay permanently empty on a deployment whose configuration is fine.
+ */
+function configuredChain(): Link[] {
+  const models = (process.env.AI_MODEL ?? "")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+
+  if (models.length === 0) return [];
+
+  const provider = {
+    id: "clinic-ai",
+    baseUrl: (process.env.AI_BASE_URL ?? "").replace(/\/+$/, ""),
+    keyEnv: "AI_API_KEY",
+    models,
+    // Not a free tier with a published cap. This figure only feeds ai-kit's
+    // rationing helpers, which this app does not call — stated at zero rather
+    // than invented, because a generous guess produces the exact wall the
+    // rationing exists to prevent.
+    dailyTokens: 0,
+  };
+
+  return models.map((model) => ({ provider, model }));
+}
+
 export async function aiChat({
   system,
   user,
@@ -40,37 +96,42 @@ export async function aiChat({
     return { ok: false, error: "AI provider not configured" };
   }
 
-  try {
-    const res = await fetch(`${process.env.AI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.AI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: process.env.AI_MODEL,
-        max_tokens: maxTokens,
-        temperature: 0.3,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-    });
+  const chain = configuredChain();
+  if (chain.length === 0) {
+    return { ok: false, error: "AI provider not configured" };
+  }
 
-    if (!res.ok) {
-      const body = await res.text();
-      console.error(`[ai] provider returned ${res.status}:`, body.slice(0, 300));
-      return { ok: false, error: `AI provider error (${res.status})` };
+  try {
+    const result = await complete({
+      chain,
+      env: process.env,
+      maxTokens,
+      temperature: 0.3,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    });
+    return { ok: true, text: result.text.trim() };
+  } catch (err) {
+    if (err instanceof ChainExhaustedError) {
+      // Every link's failure, not only the last — the detail belongs in the
+      // log, where the person fixing it is already looking.
+      console.error(
+        "[ai] every configured model failed:",
+        err.failures.map((f) => f.message).join(" | "),
+      );
+
+      // A rate limit is the one failure a clinician can act on — "try again
+      // after lunch" is a different instruction from "this is broken" — so say
+      // which kind it was instead of repeating a bare status code at them.
+      const rateLimited = err.failures.find((f) => f.message.includes("429"));
+      if (rateLimited) {
+        return { ok: false, error: `AI unavailable — ${rateLimitMessage(rateLimited.message)}` };
+      }
+      return { ok: false, error: "AI provider error" };
     }
 
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text) return { ok: false, error: "AI provider returned an empty response" };
-    return { ok: true, text };
-  } catch (err) {
     console.error("[ai] request failed:", err);
     return { ok: false, error: "AI provider unreachable" };
   }
