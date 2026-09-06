@@ -11,6 +11,9 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.11.3
         version: 1.11.3
+      '@bitbaum/ai-kit':
+        specifier: ^0.9.0
+        version: 0.9.0(react@19.2.8)
       '@bitbaum/mail-kit':
         specifier: ^0.1.0
         version: 0.1.0
@@ -183,6 +186,15 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@bitbaum/ai-kit@0.9.0':
+    resolution: {integrity: sha512-qt1theoM00YOXet8x1DnrDL7UPxiqUoY7B4KST0ZbDkuj+PIPAAd9OLa1GgR4VQNINxtAYZZfrqS6jsmRtxLLg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   '@bitbaum/mail-kit@0.1.0':
     resolution: {integrity: sha512-RbFBDANTUEb2/O2duSXIp+lb8y9ycrdbSTPnvoQ8iZOZsfxQZLseKzgCZumN31q7jRbVNHjQRao0envGWsFJ5Q==}
@@ -2111,6 +2123,15 @@ packages:
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
     engines: {node: '>= 6.0.0'}
+
+  ai-forms@0.1.2:
+    resolution: {integrity: sha512-agadca4pN0iGlZTlNy1Vo2SmnQB+0dNkrQSDE3wCJYeaVxKDs5KaxiwGj5+GL6mVYcI1xZ8pwnT9kL9WcxnBHA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   ajv-formats@2.1.1:
     resolution: {integrity: sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==}
@@ -4246,6 +4267,12 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
+  '@bitbaum/ai-kit@0.9.0(react@19.2.8)':
+    dependencies:
+      ai-forms: 0.1.2(react@19.2.8)
+    optionalDependencies:
+      react: 19.2.8
+
   '@bitbaum/mail-kit@0.1.0': {}
 
   '@drizzle-team/brocli@0.10.2': {}
@@ -5754,6 +5781,10 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  ai-forms@0.1.2(react@19.2.8):
+    optionalDependencies:
+      react: 19.2.8
 
   ajv-formats@2.1.1(ajv@8.20.0):
     optionalDependencies:
