@@ -49,6 +49,14 @@ const SELF_AUTHENTICATING = new Set<string>([
   "/api/account", // registration; Zod-validated, creates (never reads) a user
   "/api/assessment-leads", // anonymous funnel counter — no PII in or out
   "/api/health", // liveness probe — returns nothing sensitive
+  // AI liveness probe. Authenticates itself with AI_PROBE_SECRET (constant-time
+  // compare, in @bitbaum/ai-kit) rather than a session, because the callers are
+  // uptime monitors and deploy scripts, which have no user to be. It reads no
+  // patient data and sends none: the probe asks a fixed question about the
+  // colour of the sky. Without the secret it is 401; with no secret configured
+  // it is 501, so a deployment that forgets to set one cannot be made to spend
+  // money by a stranger.
+  "/api/health/ai",
   // Calendar subscription feed: clients send no cookies, so the URL is the
   // credential — an HMAC of the user id verified in the handler.
   "/api/calendar/[id]/[token]",
